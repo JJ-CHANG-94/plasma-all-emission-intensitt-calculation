@@ -1,0 +1,144 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from tkinter import*
+import os
+from pandas import DataFrame
+import math
+from scipy import integrate
+from scipy.integrate import dblquad
+
+
+#############建立窗口#########
+root = Tk()#建立tkinter窗口
+root.title("温度范围")# 设置标题
+Label(root, text='温度1：').grid(row=0, column=0)# 设置标签，Grid()网格
+Label(root, text='温度2：').grid(row=1, column=0)# 选项row代表行，column代表列
+Label(root, text='波长1：').grid(row=2, column=0)
+Label(root, text='波长2：').grid(row=3, column=0)
+e1 = Entry(root)# 输入框
+e2 = Entry(root)
+e3 = Entry(root)
+e4 = Entry(root)
+e1.grid(row=0, column=1, padx=20, pady=10)
+e2.grid(row=1, column=1, padx=20, pady=10)
+e3.grid(row=2, column=1, padx=20, pady=10)
+e4.grid(row=3, column=1, padx=20, pady=10)
+Button(root, text='获取参数并继续', width=20, command=root.co) \
+.grid(row=4, column=1, sticky=E, padx=10, pady=5)# 退出直接调用根窗口的quit方法
+mainloop()
+a =float(e1.get())
+b =float(e2.get())
+c =int(e3.get())
+d =int(e4.get())
+
+
+plt.figure(figsize=(4,4), dpi=80)
+plt.subplot(111)
+
+ax = plt.subplot(111)
+ax.set_title('all emission intensity')
+ax.spines['right'].set_color('none')
+ax.spines['top'].set_color('none')
+ax.xaxis.set_ticks_position('bottom')
+ax.yaxis.set_ticks_position('left')
+
+#####读取数据########
+df_ArI=pd.read_csv('Ar I_Spectral Emission intensity_Ritz Wavelength_转置.csv', index_col=0, header= 0)
+df_ArII=pd.read_csv('Ar II_Spectral Emission intensity_Ritz Wavelength_转置.csv', index_col=0, header= 0)
+df_ArIII=pd.read_csv('Ar III_Spectral Emission intensity_Ritz Wavelength_转置.csv',index_col=0, header= 0)
+df_parameter=pd.read_csv('Parameter_Ar.csv', index_col=0, header= 0)
+
+#####设置读取数据范围########
+wavelength_ArI = df_ArI.loc[ c:d ]
+wavelength_ArII = df_ArII.loc[ c:d ]
+wavelength_ArIII = df_ArIII.loc[ c:d ]
+df1=wavelength_ArI.T
+df2=wavelength_ArII.T
+df3=wavelength_ArIII.T
+
+df1['Intensity_ArI'] = df1.apply(np.sum, axis=1)
+df2['Intensity_ArII'] = df2.apply(np.sum, axis=1)
+df3['Intensity_ArIII'] = df3.apply(np.sum, axis=1)
+#####设置坐标轴数据#####
+
+
+# ##########线光计算######
+df1=df1['Intensity_ArI']
+df2=df2['Intensity_ArII']
+df3=df3['Intensity_ArIII']
+e_spectral = df1+df2+df3
+
+# ##########连续光计算######
+Cei = 1.632 * 10**(-43)
+Cea = 1.026 * 10**(-34)
+h = 6.62607004*10**(-34)
+c = 299792458
+k = 1.38064852*10**(-23)
+Z_ArI = 1
+Z_ArII = 2
+eff = 1.13
+efb = 1.5
+c=c*10
+d=d*10
+
+######ArI 连续光######
+#######εfb Ar II-I
+efb_ArII_ArI = 0
+for wavelength in range(c, d,1):
+        efb_ArII_ArI += Cei *df_parameter['n AII[m-3]'] *df_parameter['ne[m-3]']*Z_ArI**2\
+                    *(1-np.exp(-h*c/(k*df_parameter['T']*wavelength*10**(-10))))*df_parameter['g/Z(T)1']*efb\
+                      /(df_parameter['T']**0.5*((wavelength*10**(-10))**2))
+efb_ArII_ArI=efb_ArII_ArI*10**(-10)
+
+#######εfb Ar III-II
+efb_ArIII_ArII = 0
+for wavelength in range(c, d,1):
+        efb_ArIII_ArII += Cei *df_parameter['n AIII[m-3]'] *df_parameter['ne[m-3]']*Z_ArII**2\
+                          *(1-np.exp(-h*c/(k*df_parameter['T']*wavelength*10**(-10))))*df_parameter['g/Z(T)2']*efb\
+                          /(df_parameter['T']**0.5*((wavelength*10**(-10))**2))
+efb_ArIII_ArII=efb_ArIII_ArII*10**(-10)
+
+#####εff ea 
+eff_ea = 0
+for wavelength in range(c, d,1):
+        eff_ea += Cea *df_parameter['na [m-3]'] *df_parameter['ne[m-3]']*df_parameter['Q(Te)(m-2)']\
+                *(1+(1+h*c/(k*df_parameter['T']*wavelength*10**(-10)))**2)*(np.exp(-h*c/(k*df_parameter['T']*wavelength*10**(-10))))\
+                *df_parameter['T']**1.5
+eff_ea=eff_ea*10**(-10)
+
+#####εff eAr II
+eff_eAr_II = 0
+for wavelength in range(c, d,1):
+        eff_eAr_II += Cei *df_parameter['n AII[m-3]'] *df_parameter['ne[m-3]']*Z_ArI**2\
+                    *(np.exp(-h*c/(k*df_parameter['T']*wavelength*10**(-10))))*eff\
+                      /(df_parameter['T']**0.5*((wavelength*10**(-10))**2))
+eff_eAr_II=eff_eAr_II*10**(-10)
+
+#####εff eAr III
+eff_eAr_III = 0
+for wavelength in range(c, d,1):
+        eff_eAr_III +=  Cei *df_parameter['n AIII[m-3]'] *df_parameter['ne[m-3]']*Z_ArI**2\
+                    *(np.exp(-h*c/(k*df_parameter['T']*wavelength*10**(-10))))*eff\
+                      /(df_parameter['T']**0.5*((wavelength*10**(-10))**2))
+eff_eAr_III=eff_eAr_III*10**(-10)
+
+#####总连续光#####
+e_contiumn = efb_ArII_ArI + efb_ArIII_ArII + eff_ea + eff_eAr_II + eff_eAr_III
+
+######总发光强度###
+e_all = np.array(e_contiumn) + np.array(e_spectral)
+T=np.arange(3000,30001,100,)
+numpy_data = np.array([T,e_all]).T
+e_all = pd.DataFrame(data=numpy_data)
+######取目标列的数据#######
+e_all=e_all.iloc[:,[1]]
+
+#####设置坐标轴数据#####
+X = np.linspace(a, b, num=271, endpoint=True)
+
+y = e_all
+
+plt.plot(X, y, linewidth=2.5, linestyle="-.")
+
+plt.show()
